@@ -1,4 +1,3 @@
-# reputation_analyzer_final.py
 import os
 os.environ["USE_TF"] = "0"
 os.environ["TRANSFORMERS_NO_TF"] = "1"
@@ -11,7 +10,6 @@ from tqdm import tqdm
 warnings.filterwarnings("ignore")
 
 def load_sentiment_pipeline():
-    print("Загрузка модели rubert-base-cased-sentiment (Blanchefort)...")
     sentiment_pipeline = pipeline(
         "sentiment-analysis",
         model="blanchefort/rubert-base-cased-sentiment",
@@ -19,14 +17,11 @@ def load_sentiment_pipeline():
         device=-1,
         framework='pt'
     )
-    print("Модель загружена.")
     return sentiment_pipeline
 
 def analyze_sentiments(df, text_column='text', sentiment_pipeline=None):
     if sentiment_pipeline is None:
         sentiment_pipeline = load_sentiment_pipeline()
-    
-    print("Анализ тональности...")
     sentiments = []
     scores = []
     for text in tqdm(df[text_column], desc="Обработка"):
@@ -54,7 +49,7 @@ def analyze_sentiments(df, text_column='text', sentiment_pipeline=None):
     return df
 
 def download_dataset():
-    # Встроенный демо-датасет (замените на реальный CSV)
+    # Встроенный демо-датасет (его нужно заменить на реальный CSV)
     sample_data = {
         'text': [
             "Отличное приложение, всё работает быстро и удобно!",
@@ -71,7 +66,6 @@ def download_dataset():
         'rating': [5, 1, 3, 1, 5, 2, 3, 5, 2, 4]
     }
     df = pd.DataFrame(sample_data)
-    print("Используется встроенный демо-датасет из 10 отзывов.")
     return df
 
 def main():
@@ -80,20 +74,16 @@ def main():
         raise ValueError("Нет колонки 'text'")
     
     sentiment_pipeline = load_sentiment_pipeline()
-    df = analyze_sentiments(df, 'text', sentiment_pipeline)
-    
+    df = analyze_sentiments(df, 'text', sentiment_pipeline)    
     output_file = "reviews_with_sentiment.csv"
     df.to_csv(output_file, index=False, encoding='utf-8-sig')
-    print(f"\nРезультат сохранён в {output_file}")
-    
-    print("\n=== Статистика тональности ===")
     print(df['sentiment'].value_counts())
-    
+
     for sentiment in ['POSITIVE', 'NEUTRAL', 'NEGATIVE']:
         examples = df[df['sentiment'] == sentiment]
         if not examples.empty:
-            print(f"\nПримеры {sentiment} отзывов (первые 2):")
-            for _, row in examples.head(2).iterrows():
+            print(f"\nПримеры {sentiment} отзывов:")
+            for _, row in examples.head(10).iterrows():
                 print(f"  - {row['text'][:100]}... (уверенность: {row['confidence']:.2f})")
 
 if __name__ == "__main__":
