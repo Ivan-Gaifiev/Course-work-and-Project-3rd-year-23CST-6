@@ -340,13 +340,22 @@ with st.sidebar:
         )
         
     # Количество отзывов
-    count = st.slider(
-        "Количество отзывов",
+    count1 = st.slider(
+        "Количество отзывов из App Store",
         min_value=10,
         max_value=500,
         value=100,
         step=10,
-        help="Сколько последних отзывов собрать (максимум)"
+        help="Сколько последних отзывов собрать из App Store (максимум)"
+    )
+
+    count2 = st.slider(
+        "Количество отзывов из Google Play",
+        min_value=10,
+        max_value=500,
+        value=100,
+        step=10,
+        help="Сколько последних отзывов собрать из Google Play(максимум)"
     )
     
     st.markdown("---")
@@ -387,11 +396,11 @@ if run_button:
                 source_id = get_or_create_source("google_play")
                 with st.spinner("Загрузка из Google Play..."):
                     # ВАЖНО: загружаем ровно count отзывов, НЕ count*2
-                    df_gp = scrape_google_play(gp_id_final, count)
+                    df_gp = scrape_google_play(gp_id_final, count2)
                     if not df_gp.empty:
                         # Обрезаем ровно до count
-                        if len(df_gp) > count:
-                            df_gp = df_gp.head(count)
+                        if len(df_gp) > count2:
+                            df_gp = df_gp.head(count2)
                         # Удаляем дубликаты
                         df_gp = df_gp.drop_duplicates(subset=['text', 'author'], keep='first')
                         # Проверяем существующие
@@ -412,11 +421,11 @@ if run_button:
                 source_id = get_or_create_source("app_store")
                 with st.spinner("Загрузка из App Store..."):
                     # ВАЖНО: загружаем ровно count отзывов
-                    df_as = scrape_app_store_rss_bulk(as_id_final, count)
+                    df_as = scrape_app_store_rss_bulk(as_id_final, count1)
                     if not df_as.empty:
                         # Обрезаем ровно до count
-                        if len(df_as) > count:
-                            df_as = df_as.head(count)
+                        if len(df_as) > count1:
+                            df_as = df_as.head(count1)
                         # Удаляем дубликаты
                         df_as = df_as.drop_duplicates(subset=['text', 'author'], keep='first')
                         # Проверяем существующие
