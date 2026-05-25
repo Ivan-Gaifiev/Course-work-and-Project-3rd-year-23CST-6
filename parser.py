@@ -7,8 +7,10 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 import time
+import requests
 
 
 # --- НАСТРОЙКИ ---
@@ -18,8 +20,8 @@ engine = create_engine(DB_URL)
 VK_TOKEN = "d5d65e18d5d65e18d5d65e180bd6974bccdd5d6d5d65e18bfda21af129793221ee595c0"
 VK_API_V = "5.131"
 
+RAPIDAPI_HOST = "google-map-places-new-v2.p.rapidapi.com"
 RAPIDAPI_KEY = "82e5480f30msh51f8902b998267ep188a52jsneacb0d36c60f"
-RAPIDAPI_HOST = "rapidapi.com"
 
 # ==================== ФУНКЦИИ РАБОТЫ С БД ====================
 def get_or_create_company(legal_name):
@@ -75,66 +77,68 @@ def get_ids(company_name):
     
     return gp_id, as_id
 
-import requests
-
-RAPIDAPI_KEY = "82e5480f30msh51f8902b998267ep188a52jsneacb0d36c60f"
-RAPIDAPI_HOST = "google-maps-places.p.rapidapi.com"  # ← замени на свой
-
 def scrape_google_maps(company_name, count=5):
-    """Сбор отзывов с Google Карт через RapidAPI (Google Places API)"""
+    """Сбор отзывов с Google Карт через RapidAPI (Google Map Places New V2)"""
     if not company_name or not company_name.strip():
         return pd.DataFrame()
 
     headers = {
+        "Content-Type": "application/json",
         "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": RAPIDAPI_HOST
+        "X-RapidAPI-Host": RAPIDAPI_HOST,
+        "X-Goog-FieldMask": "places.id,places.displayName,places.reviews"  # запрашиваем ID, имя и отзывы
     }
 
-    # 1. Поиск Place ID
-    search_url = f"https://{RAPIDAPI_HOST}/maps/api/place/findplacefromtext/json"
-    params = {
-        "input": company_name,
-        "inputtype": "textquery",
-        "fields": "place_id",
-        "language": "ru"
+    # 1. Поиск места через SearchText (POST)
+    search_url = f"https://{RAPIDAPI_HOST}/v1/places:searchText"
+    body = {
+        "textQuery": company_name,
+        "languageCode": "ru"
     }
+    print(f"🔍 Ищем место через SearchText: {search_url}")
     try:
-        resp = requests.get(search_url, headers=headers, params=params, timeout=10).json()
-        candidates = resp.get('candidates', [])
-        if not candidates:
-            print("❌ Google Maps (RapidAPI): место не найдено")
+        resp = requests.post(search_url, headers=headers, json=body, timeout=10)
+        print(f"Статус поиска: {resp.status_code}")
+        data = resp.json()
+        places = data.get('places', [])
+        if not places:
+            print("❌ Место не найдено")
             return pd.DataFrame()
-        place_id = candidates[0]['place_id']
+        place = places[0]
+        place_id = place['id']
+        display_name = place.get('displayName', {}).get('text', '')
+        print(f"✅ Найдено: {display_name} (ID: {place_id})")
     except Exception as e:
         print(f"❌ Ошибка поиска места: {e}")
         return pd.DataFrame()
 
-    # 2. Получение отзывов
-    details_url = f"https://{RAPIDAPI_HOST}/maps/api/place/details/json"
-    params = {
-        "place_id": place_id,
-        "fields": "reviews",
-        "language": "ru",
-        "reviews_no_translation": "true"
-    }
-    try:
-        resp = requests.get(details_url, headers=headers, params=params, timeout=10).json()
-        reviews = resp.get('result', {}).get('reviews', [])
-        if not reviews:
-            print("❌ Google Maps (RapidAPI): отзывов нет")
+    # 2. Получение деталей (включая отзывы) – можно прямо из searchText, но обычно reviews уже есть в ответе,
+    #    если запросить fields=* или places.reviews. Проверим, есть ли отзывы в ответе поиска.
+    reviews = place.get('reviews', [])
+    if not reviews:
+        # Если отзывов нет, делаем дополнительный запрос Place Details (GET)
+        details_url = f"https://{RAPIDAPI_HOST}/v1/places/{place_id}"
+        # Для деталей используем другой FieldMask, если нужно
+        headers["X-Goog-FieldMask"] = "reviews"
+        try:
+            details_resp = requests.get(details_url, headers=headers, timeout=10)
+            details_data = details_resp.json()
+            reviews = details_data.get('reviews', [])
+        except Exception as e:
+            print(f"Ошибка получения деталей: {e}")
             return pd.DataFrame()
-    except Exception as e:
-        print(f"❌ Ошибка получения отзывов: {e}")
+
+    if not reviews:
+        print("❌ Отзывов нет")
         return pd.DataFrame()
 
-    # 3. Собираем нужное количество (но не больше, чем есть)
     all_reviews = []
     for review in reviews[:count]:
         all_reviews.append({
-            'date': pd.to_datetime(review.get('time'), unit='s') if review.get('time') else datetime.datetime.now(),
-            'rating': review.get('rating'),
-            'text': review.get('text', ''),
-            'author': review.get('author_name', 'Аноним'),
+            'date': pd.to_datetime(review.get('publishTime'), errors='coerce') if review.get('publishTime') else datetime.datetime.now(),
+            'rating': review.get('rating', 0),
+            'text': review.get('text', {}).get('text', ''),
+            'author': review.get('authorAttribution', {}).get('displayName', 'Аноним'),
             'title': '',
             'url': f"https://maps.google.com/?q=place_id:{place_id}"
         })
