@@ -1,18 +1,11 @@
-# Основные фреймворки
 streamlit>=1.28.0
 pandas>=2.0.0
 numpy>=1.24.0
-
-# Работа с базой данных
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0
 supabase>=2.0.0
-
-# Парсинг отзывов
 google-play-scraper>=1.2.0
 requests>=2.31.0
-
-# NLP и анализ текста
 transformers>=4.35.0
 torch>=2.0.0
 nltk>=3.8.0
@@ -20,13 +13,16 @@ bertopic>=0.16.0
 sentence-transformers>=2.2.0
 scikit-learn>=1.3.0
 natasha>=1.5.0
-
-# Визуализация
 matplotlib>=3.7.0
 wordcloud>=1.9.0
 plotly>=5.17.0
-
-# Вспомогательные библиотеки
 tqdm>=4.66.0
 python-dotenv>=1.0.0
 tenacity>=8.2.0
+torchvision >= 0.26.0
+beautifulsoup4>=4.12.0 
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+gigachat>=0.1.0
+sentence-transformers==2.2.0
+lxml==4.9.0
