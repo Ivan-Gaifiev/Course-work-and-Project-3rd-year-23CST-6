@@ -16,6 +16,8 @@ from collections import Counter
 
 from parser import get_ids, get_or_create_company, get_or_create_source, scrape_google_play, scrape_app_store_rss_bulk, save_mentions
 from reputation_monitor import analyze_reviews_incrementally, engine
+from topic_analyzer import get_word_frequencies_simple, get_word_frequencies_lemmatized, get_best_topics, run_all_models_comparison, lda_topic_model, nmf_topic_model, bertopic_model
+
 
 try:
     nltk.data.find('tokenizers/punkt')
