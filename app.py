@@ -23,16 +23,7 @@ from parser import (
     scrape_google_maps, scrape_vk_newsfeed, scrape_habr_rss, scrape_google_news
 )
 from reputation_monitor import analyze_reviews_incrementally, engine
-from topic_analyzer import (
-    get_word_frequencies_simple,
-    get_word_frequencies_lemmatized,
-    get_best_topics,
-    run_all_models_comparison,
-    lda_topic_model,
-    nmf_topic_model,
-    bertopic_model
-)
-
+from vanya_topics import lda_topic_model, nmf_topic_model, bertopic_model, run_experiment, get_word_frequencies, gigachat_summarize_topic
 # Загрузка NLTK данных
 try:
     nltk.data.find('tokenizers/punkt')
@@ -239,81 +230,69 @@ def get_sources_stats(company_id=None):
     return pd.DataFrame()
 
 # ==================== ФУНКЦИИ ДЛЯ ТЕМАТИЧЕСКОГО АНАЛИЗА ====================
+# ==================== ФУНКЦИИ ДЛЯ ТЕМАТИЧЕСКОГО АНАЛИЗА ====================
 def display_topic_analysis(df, company_name):
-    """Отображение тематического анализа отзывов"""
+    """Отображение тематического анализа отзывов с интеграцией GigaChat"""
     
     if df.empty:
         st.info("Нет данных для тематического анализа")
         return
     
     st.markdown("### 🎯 Ключевые темы и тренды")
-    st.markdown("Анализ основных тем, которые обсуждают пользователи в отзывах")
+    st.markdown("Искусственный интеллект сгруппировал отзывы по смыслу и обобщил.")
     
     # Создаем вкладки для разных методов анализа
-    tab_lda, tab_nmf, tab_bertopic, tab_comparison = st.tabs(["📚 LDA (Классический)", "⚡ NMF (Быстрый)", "🧠 BERTopic (Точный)", "📊 Сравнение моделей"])
+    tab_lda, tab_nmf, tab_bertopic, tab_comparison = st.tabs([
+        "📚 LDA (Классический разбор)", 
+        "⚡ NMF (Экспресс-анализ)", 
+        "🧠 BERTopic (Продвинутая нейросеть)", 
+        "📊 Сравнение алгоритмов"
+    ])
     
     with tab_lda:
-        st.markdown("#### LDA - Лагранжево размещение Дирихле")
-        st.caption("Классический метод тематического моделирования, хорошо работает на больших текстах")
+        st.markdown("#### LDA (Классический тематический разбор)")
+        st.caption("Проверенный временем метод. Отлично раскладывает большие объемы отзывов на понятные составляющие.")
         
         col1, col2 = st.columns([3, 1])
         with col2:
             n_topics_lda = st.slider(
-                "Количество тем (LDA)",
-                min_value=2,
-                max_value=8,
-                value=3,
-                step=1,
-                key="lda_topics"
+                "Сколько тем выделить?",
+                min_value=2, max_value=8, value=3, step=1, key="lda_topics"
             )
         
         with col1:
-            if st.button("🔍 Запустить LDA анализ", key="run_lda"):
-                with st.spinner("Запуск LDA анализа..."):
+            if st.button("🔍 Запустить классический анализ", key="run_lda"):
+                with st.spinner("Алгоритм группирует отзывы..."):
                     try:
-                        # Запускаем LDA модель
                         lda_result = lda_topic_model(df, n_topics=n_topics_lda, n_words=6)
                         
                         if lda_result and lda_result['topics']:
-                            st.success(f"✅ Выделено {len(lda_result['topics'])} тем")
+                            st.success(f"✅ Успешно выделено {len(lda_result['topics'])} ключевых направлений!")
                             
-                            # Показываем метрики
+                            # Понятные метрики вместо сухих терминов
                             col_coh, col_time = st.columns(2)
                             with col_coh:
-                                st.metric("Когерентность тем", f"{lda_result['coherence']:.3f}")
+                                st.metric("🎯 Четкость разделения тем", f"{lda_result['coherence']:.2f}")
+                                st.caption("👉 Чем выше этот показатель, тем более обособленными и логичными получились группы отзывов.")
                             with col_time:
-                                st.metric("Время анализа", f"{lda_result['time_sec']:.2f} сек")
+                                st.metric("⏱️ Время работы алгоритма", f"{lda_result['time_sec']:.2f} сек")
                             
-                            # Визуализация когерентности тем
-                            topics_coherence = pd.DataFrame({
-                                'Тема': [f"Тема {i+1}" for i in range(len(lda_result['topics']))],
-                                'Когерентность': lda_result['per_topic_coherence']
-                            })
-                            
-                            fig_coh = px.bar(
-                                topics_coherence,
-                                x='Тема',
-                                y='Когерентность',
-                                title='Когерентность каждой темы',
-                                color='Когерентность',
-                                color_continuous_scale='Viridis'
-                            )
-                            st.plotly_chart(fig_coh, use_container_width=True)
-                            
-                            # Детальное отображение каждой темы
-                            st.markdown("#### 📌 Детальное описание тем")
+                            st.markdown("#### 📌 Что обсуждают пользователи (Расшифровка ИИ):")
                             
                             for idx, (topic_words, coherence) in enumerate(zip(lda_result['topics'], lda_result['per_topic_coherence'])):
-                                with st.expander(f"📌 Тема {idx + 1} (когерентность: {coherence:.3f})"):
-                                    # Показываем ключевые слова
-                                    st.markdown("**Ключевые слова:**")
-                                    cols = st.columns(min(len(topic_words), 6))
-                                    for i, word in enumerate(topic_words):
-                                        with cols[i % len(cols)]:
-                                            st.markdown(f"🔹 **{word}**")
+                                # Запускаем GigaChat для формулирования темы
+                                with st.spinner(f"Генерация понятного названия для Темы №{idx + 1}..."):
+                                    try:
+                                        human_title = gigachat_summarize_topic(topic_words)
+                                    except Exception:
+                                        human_title = f"Тема №{idx + 1}: Набор ключевых слов"
+                                
+                                with st.expander(f"📋 {human_title} (Четкость темы: {coherence:.2f})"):
+                                    st.markdown("**Ключевые слова, по которым нейросеть узнала тему:**")
+                                    st.caption(", ".join([f"`{w}`" for w in topic_words]))
                                     
-                                    # Пытаемся найти примеры отзывов для этой темы
-                                    st.markdown("**Примеры отзывов по теме:**")
+                                    # Примеры отзывов
+                                    st.markdown("**📝 Примеры отзывов из этой группы:**")
                                     examples_found = 0
                                     for text in df['text'].head(100):
                                         if any(word in str(text).lower() for word in topic_words):
@@ -321,89 +300,59 @@ def display_topic_analysis(df, company_name):
                                             examples_found += 1
                                             if examples_found >= 3:
                                                 break
-                                    
                                     if examples_found == 0:
-                                        st.caption("Нет прямых примеров для этой темы")
+                                        st.caption("Прямых примеров текста не найдено.")
                         else:
                             st.warning("Не удалось выделить темы")
-                            
                     except Exception as e:
-                        st.error(f"Ошибка при LDA анализе: {str(e)}")
+                        st.error(f"Ошибка при анализе: {str(e)}")
     
     with tab_nmf:
-        st.markdown("#### NMF - Неотрицательное матричное разложение")
-        st.caption("Более быстрый метод, хорошо работает для коротких текстов и отзывов")
+        st.markdown("#### NMF (Экспресс-анализ)")
+        st.caption("Математический метод, идеально подходящий для коротких текстов и емких отзывов из магазинов приложений.")
         
         col1, col2 = st.columns([3, 1])
         with col2:
             n_topics_nmf = st.slider(
-                "Количество тем (NMF)",
-                min_value=2,
-                max_value=8,
-                value=3,
-                step=1,
-                key="nmf_topics"
+                "Сколько тем выделить?",
+                min_value=2, max_value=8, value=3, step=1, key="nmf_topics"
             )
         
         with col1:
-            if st.button("⚡ Запустить NMF анализ", key="run_nmf"):
-                with st.spinner("Запуск NMF анализа..."):
+            if st.button("⚡ Запустить экспресс-анализ", key="run_nmf"):
+                with st.spinner("Быстрый анализ текстов..."):
                     try:
-                        # Запускаем NMF модель
                         nmf_result = nmf_topic_model(df, n_topics=n_topics_nmf, n_words=6)
                         
                         if nmf_result and nmf_result['topics']:
                             st.success(f"✅ Выделено {len(nmf_result['topics'])} тем")
                             
-                            # Показываем метрики
                             col_coh, col_time = st.columns(2)
                             with col_coh:
-                                st.metric("Когерентность тем", f"{nmf_result['coherence']:.3f}")
+                                st.metric("🎯 Четкость разделения тем", f"{nmf_result['coherence']:.2f}")
                             with col_time:
-                                st.metric("Время анализа", f"{nmf_result['time_sec']:.2f} сек")
+                                st.metric("⏱️ Время работы алгоритма", f"{nmf_result['time_sec']:.2f} сек")
                             
-                            # Визуализация важности тем
-                            topics_df = pd.DataFrame({
-                                'Тема': [f"Тема {i+1}" for i in range(len(nmf_result['topics']))],
-                                'Ключевые слова': [', '.join(words) for words in nmf_result['topics']],
-                                'Когерентность': nmf_result['per_topic_coherence']
-                            })
-                            
-                            fig_topics = px.bar(
-                                topics_df,
-                                x='Тема',
-                                y='Когерентность',
-                                title='Релевантность тем (NMF)',
-                                color='Когерентность',
-                                color_continuous_scale='Viridis',
-                                text='Ключевые слова'
-                            )
-                            fig_topics.update_traces(textposition='outside')
-                            st.plotly_chart(fig_topics, use_container_width=True)
-                            
-                            # Детальное отображение каждой темы
-                            st.markdown("#### 📌 Темы и примеры отзывов")
+                            st.markdown("#### 📌 Результаты анализа от GigaChat:")
                             
                             for idx, (topic_words, coherence) in enumerate(zip(nmf_result['topics'], nmf_result['per_topic_coherence'])):
-                                with st.expander(f"📌 Тема {idx + 1}: {', '.join(topic_words[:3])}... (когерентность: {coherence:.3f})"):
-                                    # Ключевые слова
-                                    st.markdown("**Полный список ключевых слов:**")
-                                    st.markdown(" ".join([f"`{word}`" for word in topic_words]))
+                                with st.spinner(f"Формулирование сути Темы №{idx + 1}..."):
+                                    try:
+                                        human_title = gigachat_summarize_topic(topic_words)
+                                    except Exception:
+                                        human_title = f"Тема №{idx + 1}"
+                                        
+                                with st.expander(f"📋 {human_title} (Четкость: {coherence:.2f})"):
+                                    st.markdown("**Связанные маркеры:** " + " ".join([f"`{word}`" for word in topic_words]))
                                     
-                                    # Примеры отзывов из кластера
                                     if 'clusters' in nmf_result and idx in nmf_result['clusters']:
-                                        examples = nmf_result['clusters'][idx][:5]
+                                        examples = nmf_result['clusters'][idx][:3]
                                         if examples:
-                                            st.markdown("**📝 Реальные отзывы пользователей на эту тему:**")
-                                            for i, example in enumerate(examples, 1):
-                                                with st.container():
-                                                    st.markdown(f"**{i}.** {example[:200]}...")
-                                                    st.markdown("---")
-                                        else:
-                                            st.caption("Нет примеров отзывов для этой темы")
+                                            st.markdown("**📝 Что пишут люди:**")
+                                            for example in examples:
+                                                st.caption(f"• {example[:200]}...")
                                     else:
-                                        # Ищем примеры
-                                        st.markdown("**📝 Примеры отзывов по теме:**")
+                                        st.markdown("**📝 Примеры отзывов:**")
                                         examples_found = 0
                                         for text in df['text']:
                                             if any(word in str(text).lower() for word in topic_words):
@@ -411,240 +360,176 @@ def display_topic_analysis(df, company_name):
                                                 examples_found += 1
                                                 if examples_found >= 3:
                                                     break
-                                        if examples_found == 0:
-                                            st.caption("Нет прямых примеров для этой темы")
                         else:
                             st.warning("Не удалось выделить темы")
-                            
                     except Exception as e:
                         st.error(f"Ошибка при NMF анализе: {str(e)}")
     
-    # Новая вкладка для BERTopic
     with tab_bertopic:
-        st.markdown("#### BERTopic - Трансформерное тематическое моделирование")
-        st.caption("Использует BERT эмбеддинги для точного выделения тем. Лучший метод для сложных и семантически связанных тем.")
+        st.markdown("#### BERTopic (Продвинутый нейросетевой анализ)")
+        st.caption("Самый умный подход. Использует языковые модели-трансформеры для улавливания тонкого контекста и сарказма.")
         
-        # Проверяем доступность BERTopic
         bertopic_available = False
         try:
             from bertopic import BERTopic
             bertopic_available = True
         except ImportError:
-            st.warning("⚠️ BERTopic не установлен. Для использования выполните: `pip install bertopic umap-learn hdbscan`")
+            st.warning("⚠️ Компонент BERTopic не установлен на сервере.")
         
         if bertopic_available:
             col1, col2 = st.columns([2, 1])
             with col2:
-                n_words_bert = st.slider(
-                    "Ключевых слов на тему",
-                    min_value=3,
-                    max_value=10,
-                    value=5,
-                    step=1,
-                    key="bert_words"
-                )
-                
-                use_gigachat = st.checkbox(
-                    "Использовать GigaChat для суммаризации",
-                    value=False,
-                    key="bert_gigachat",
-                    help="Требует настройки GigaChat API"
-                )
+                n_words_bert = st.slider("Глубина анализа темы (слов)", min_value=3, max_value=10, value=5, key="bert_words")
             
             with col1:
-                if st.button("🧠 Запустить BERTopic анализ", key="run_bertopic"):
-                    with st.spinner("Запуск BERTopic анализа (может занять 2-5 минут)..."):
+                if st.button("🧠 Включить нейросетевой поиск", key="run_bertopic"):
+                    with st.spinner("Нейросеть глубоко изучает тексты (это может занять до пары минут)..."):
                         try:
-                            # Запускаем BERTopic модель
                             bert_result = bertopic_model(df, n_words=n_words_bert)
                             
                             if bert_result and bert_result['topics'] and bert_result['n_topics'] > 0:
-                                st.success(f"✅ Выделено {bert_result['n_topics']} тем")
+                                st.success(f"✅ Нейросеть выявила {bert_result['n_topics']} устойчивых тем")
                                 
-                                # Показываем метрики
                                 col_coh, col_time = st.columns(2)
                                 with col_coh:
-                                    st.metric("Когерентность тем", f"{bert_result['coherence']:.3f}")
+                                    st.metric("🎯 Качество понимания контекста", f"{bert_result['coherence']:.2f}")
                                 with col_time:
-                                    st.metric("Время анализа", f"{bert_result['time_sec']:.2f} сек")
+                                    st.metric("⏱️ Время размышления ИИ", f"{bert_result['time_sec']:.2f} сек")
                                 
-                                if 'error' in bert_result:
-                                    st.warning(f"BERTopic работал с ограничениями: {bert_result['error']}")
-                                
-                                # Визуализация распределения тем
-                                if 'doc_topic_assignment' in bert_result and bert_result['doc_topic_assignment']:
-                                    topic_counts = pd.Series(bert_result['doc_topic_assignment']).value_counts()
-                                    topic_counts = topic_counts[topic_counts.index != -1]  # Убираем выбросы
-                                    
-                                    if not topic_counts.empty:
-                                        fig_dist = px.bar(
-                                            x=[f"Тема {i}" for i in topic_counts.index],
-                                            y=topic_counts.values,
-                                            title='Распределение отзывов по темам',
-                                            labels={'x': 'Тема', 'y': 'Количество отзывов'},
-                                            color=topic_counts.values,
-                                            color_continuous_scale='Viridis'
-                                        )
-                                        st.plotly_chart(fig_dist, use_container_width=True)
-                                
-                                # Детальное отображение каждой темы
-                                st.markdown("#### 📌 Семантические темы и примеры")
-                                
+                                st.markdown("#### 📌 Темы, найденные трансформером:")
                                 for idx, topic_words in enumerate(bert_result['topics']):
                                     coherence = bert_result['per_topic_coherence'][idx] if idx < len(bert_result['per_topic_coherence']) else 0.5
                                     
-                                    with st.expander(f"📌 Тема {idx + 1}: {', '.join(topic_words[:3])}... (когерентность: {coherence:.3f})"):
-                                        # Ключевые слова
-                                        st.markdown("**Ключевые слова темы:**")
-                                        cols = st.columns(min(len(topic_words), 6))
-                                        for i, word in enumerate(topic_words):
-                                            with cols[i % len(cols)]:
-                                                st.markdown(f"🔹 **{word}**")
+                                    with st.spinner(f"GigaChat переводит Тему №{idx + 1}..."):
+                                        try:
+                                            human_title = gigachat_summarize_topic(topic_words)
+                                        except Exception:
+                                            human_title = f"Группа смыслов №{idx + 1}"
+                                            
+                                    with st.expander(f"🧠 {human_title} (Качество смысловой группы: {coherence:.2f})"):
+                                        st.markdown("**Обнаруженные ИИ взаимосвязи:** " + ", ".join([f"`{w}`" for w in topic_words]))
                                         
-                                        # Поиск примеров отзывов для этой темы
-                                        st.markdown("**📝 Примеры отзывов по теме:**")
+                                        st.markdown("**📝 Конкретные отзывы из этой категории:**")
                                         examples_found = 0
                                         for i, text in enumerate(df['text'].head(200)):
-                                            if 'doc_topic_assignment' in bert_result and i < len(bert_result['doc_topic_assignment']):
-                                                if bert_result['doc_topic_assignment'][i] == idx:
-                                                    st.text(f"• {str(text)[:150]}...")
-                                                    examples_found += 1
-                                                    if examples_found >= 3:
-                                                        break
-                                            else:
-                                                # fallback поиск по ключевым словам
-                                                if any(word.lower() in str(text).lower() for word in topic_words):
-                                                    st.text(f"• {str(text)[:150]}...")
-                                                    examples_found += 1
-                                                    if examples_found >= 3:
-                                                        break
-                                        
-                                        if examples_found == 0:
-                                            st.caption("Нет прямых примеров для этой темы")
+                                            if 'doc_topic_assignment' in bert_result and i < len(bert_result['doc_topic_assignment']) and bert_result['doc_topic_assignment'][i] == idx:
+                                                st.text(f"• {str(text)[:150]}...")
+                                                examples_found += 1
+                                                if examples_found >= 3:
+                                                    break
+                                            elif any(word.lower() in str(text).lower() for word in topic_words):
+                                                st.text(f"• {str(text)[:150]}...")
+                                                examples_found += 1
+                                                if examples_found >= 3:
+                                                    break
                             else:
-                                if bert_result and bert_result.get('n_topics') == 0:
-                                    st.warning("BERTopic не смог выделить темы. Попробуйте увеличить количество отзывов для анализа.")
-                                else:
-                                    st.warning("Не удалось выделить темы с помощью BERTopic")
-                                    
+                                st.warning("Нейросеть не смогла сгруппировать текущий объем данных. Попробуйте загрузить больше отзывов.")
                         except Exception as e:
-                            st.error(f"Ошибка при BERTopic анализе: {str(e)}")
-                            st.info("Убедитесь, что установлены: pip install bertopic umap-learn hdbscan sentence-transformers")
-        else:
-            st.info("📦 Для использования BERTopic установите необходимые библиотеки:")
-            st.code("pip install bertopic umap-learn hdbscan sentence-transformers", language="bash")
+                            st.error(f"Ошибка ИИ-анализа: {str(e)}")
+        
     
     with tab_comparison:
-        st.markdown("#### Сравнение моделей тематического анализа")
-        st.caption("Сравнение LDA, NMF и BERTopic для разного количества тем")
+        st.markdown("#### Сравнение математической точности алгоритмов")
+        st.caption("Вкладка для проверки того, какой математический метод сработает чище всего на ваших данных.")
         
-        if st.button("📊 Запустить сравнение моделей", key="run_comparison"):
-            with st.spinner("Запуск сравнения моделей (может занять время)..."):
+        if st.button("📊 Запустить соревнование моделей", key="run_comparison"):
+            with st.spinner("Тестирование моделей..."):
                 try:
-                    # Запускаем сравнение моделей
                     topic_range = [2, 3, 5, 7]
-                    comparison_df = run_all_models_comparison(df, topic_range)
+                    comparison_df = run_experiment(df, topic_range)
                     
                     if not comparison_df.empty:
-                        st.success("✅ Сравнение моделей завершено")
+                        st.success("✅ Соревнование завершено!")
                         
-                        # График сравнения
                         fig_comp = px.line(
-                            comparison_df,
-                            x='n_topics',
-                            y='coherence',
-                            color='model',
-                            title='Сравнение когерентности моделей',
-                            labels={'n_topics': 'Количество тем', 'coherence': 'Когерентность (качество)'},
-                            markers=True,
-                            color_discrete_map={'LDA': '#3498db', 'NMF': '#e74c3c', 'BERTopic': '#2ecc71'}
+                            comparison_df, x='n_topics', y='coherence', color='model',
+                            title='Какая модель построила темы наиболее четко?',
+                            labels={'n_topics': 'Количество тем в тесте', 'coherence': 'Понятность и четкость группы'},
+                            markers=True
                         )
-                        fig_comp.update_layout(hovermode='x unified')
                         st.plotly_chart(fig_comp, use_container_width=True)
                         
-                        # Таблица результатов
-                        st.markdown("#### 📊 Детальные результаты")
                         st.dataframe(
-                            comparison_df.round(4),
-                            use_container_width=True,
-                            hide_index=True,
+                            comparison_df.round(4), use_container_width=True, hide_index=True,
                             column_config={
-                                'model': 'Модель',
+                                'model': 'Алгоритм / Модель',
                                 'n_topics': 'Количество тем',
-                                'coherence': 'Когерентность',
-                                'time': 'Время (сек)'
+                                'coherence': 'Четкость (выше — лучше)',
+                                'time': 'Скорость работы (сек)'
                             }
                         )
                         
-                        # Рекомендация лучшей модели
                         best_model = comparison_df.loc[comparison_df['coherence'].idxmax()]
-                        st.markdown("---")
-                        st.markdown("#### 🏆 Рекомендация")
-                        
-                        col_rec1, col_rec2, col_rec3 = st.columns(3)
-                        with col_rec1:
-                            st.metric("Лучшая модель", best_model['model'])
-                        with col_rec2:
-                            st.metric("Оптимальное количество тем", f"{int(best_model['n_topics'])}")
-                        with col_rec3:
-                            st.metric("Когерентность", f"{best_model['coherence']:.3f}")
-                        
-                        if best_model['model'] == 'BERTopic':
-                            st.info(
-                                f"💡 **Рекомендация:** BERTopic показывает наилучшее качество ({best_model['coherence']:.3f}). "
-                                f"Этот метод лучше всего подходит для выявления семантических тем в отзывах."
-                            )
-                        else:
-                            st.info(
-                                f"💡 **Рекомендация:** Используйте модель **{best_model['model']}** "
-                                f"с **{int(best_model['n_topics'])}** темами для анализа отзывов."
-                            )
+                        st.markdown(f"🏆 **Победитель тестирования:** Модель **{best_model['model']}** при разбиении на **{int(best_model['n_topics'])}** тем(ы).")
                     else:
-                        st.warning("Не удалось выполнить сравнение моделей")
-                        
+                        st.warning("Не удалось собрать данные сравнения.")
                 except Exception as e:
-                    st.error(f"Ошибка при сравнении моделей: {str(e)}")
-                    st.info("Убедитесь, что установлены все необходимые библиотеки")
+                    st.error(f"Ошибка расчета: {str(e)}")
+
 
 def display_key_topics_summary(df):
-    """Отображение краткой сводки по ключевым темам"""
+    """Отображение краткой сводки по ключевым темам на главной странице с развернутыми предложениями от GigaChat"""
     
     if df.empty:
         return
     
-    st.markdown("### 🔥 Популярные темы в отзывах")
+    st.markdown("### 🔥 Главные темы в отзывах по версии GigaChat")
     
-    # Используем NMF для быстрого выделения тем
-    with st.spinner("Анализ ключевых тем..."):
+    with st.spinner("GigaChat анализирует группы слов и составляет описание тем..."):
         try:
-            nmf_result = nmf_topic_model(df, n_topics=3, n_words=4)
+            # Используем алгоритм NMF для выделения 3 ключевых тем
+            nmf_result = nmf_topic_model(df, n_topics=3, n_words=5)
             
             if nmf_result and nmf_result['topics']:
-                # Создаем карточки для каждой темы
                 cols = st.columns(min(len(nmf_result['topics']), 3))
                 
                 for idx, (col, topic_words) in enumerate(zip(cols, nmf_result['topics'])):
                     with col:
                         coherence = nmf_result['per_topic_coherence'][idx]
-                        color = "🟢" if coherence > 0.7 else "🟡" if coherence > 0.4 else "🔴"
+                        color = "🟢" if coherence > 0.6 else "🟡" if coherence > 0.3 else "🔴"
                         
+                        # Обращаемся к GigaChat, чтобы он сформулировал полноценные предложения
+                        try:
+                            gigachat_sentences = gigachat_summarize_topic(topic_words)
+                        except Exception:
+                            gigachat_sentences = "Не удалось построить описание. Проверьте подключение к GigaChat."
+                        
+                        # Красивая карточка, где есть и "Тема X", и предложения ИИ, и маркеры слов
                         st.markdown(f"""
                         <div style="
-                            padding: 15px;
-                            border-radius: 10px;
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            padding: 20px;
+                            border-radius: 12px;
+                            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
                             color: white;
                             margin: 10px 0;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                            min-height: 240px;
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: space-between;
                         ">
-                            <h3 style="color: white; margin: 0 0 10px 0;">{color} Тема {idx + 1}</h3>
-                            <p style="font-size: 16px; margin: 5px 0;"><strong>Ключевые слова:</strong><br>{', '.join(topic_words)}</p>
-                            <p style="font-size: 14px; margin: 5px 0; opacity: 0.9;">Качество: {coherence:.2%}</p>
+                            <div>
+                                <h4 style="color: white; margin: 0 0 10px 0; font-size: 18px;">
+                                    {color} Тема {idx + 1}
+                                </h4>
+                                <p style="font-size: 14px; margin: 0 0 15px 0; line-height: 1.4; font-weight: 400;">
+                                    {gigachat_sentences}
+                                </p>
+                            </div>
+                            <div>
+                                <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.2); margin: 10px 0;">
+                                <p style="font-size: 12px; margin: 5px 0; opacity: 0.9;">
+                                    <strong>Набор слов:</strong> {', '.join(topic_words)}
+                                </p>
+                            </div>
                         </div>
                         """, unsafe_allow_html=True)
                 
                 st.markdown("---")
         except Exception as e:
-            st.error(f"Ошибка при анализе тем: {str(e)}")
+            st.caption(f"Временные технические ограничения при экспресс-анализе тем: {str(e)}")
+
+
 # ==================== ФУНКЦИИ ДЛЯ СБОРА ДАННЫХ ====================
 
 def scrape_source_with_progress(source_config, company_id, progress_bar, status_text):
@@ -724,7 +609,7 @@ with st.sidebar:
     # Ввод названия компании
     company_name = st.text_input(
         "🏢 Название компании или приложения",
-        placeholder="Например: VK, Яндекс, Telegram, OZON",
+        placeholder="Например: VK, Яндекс, OZON",
         value=st.session_state.last_company_name
     )
     
@@ -955,20 +840,19 @@ if run_button:
         for idx, (source_name, count) in enumerate(source_results.items()):
             with cols[idx % 4]:
                 if count > 0:
-                    st.metric(source_name, f"+{count}", "новых")
+                    st.metric(source_name, f"+{count}", "новых отзывов")
                 else:
-                    st.metric(source_name, "0", "нет новых")
+                    st.metric(source_name, "0", "нет новых отзывов")
         
         if total_reviews > 0:
             st.balloons()
             st.success(f"🎉 Всего собрано {total_reviews} новых упоминаний!")
             
             # Анализ тональности
-            st.markdown("### 🔬 Анализ тональности")
+            st.markdown("### 🔬 Анализ тональности отзывов")
             analyze_progress = st.progress(0)
             analyze_status = st.empty()
             
-            analyze_status.text("🔄 Анализ тональности отзывов...")
             
             # Анализируем инкрементально
             with st.spinner("Анализ тональности..."):
@@ -1062,65 +946,44 @@ if st.session_state.reviews_loaded or (run_button and 'company_id' in locals()):
 
             with tab_cloud:
                 st.markdown("#### Облако ключевых слов")
+                # Получаем отзывы для облака слов
+                cloud_df = get_recent_reviews(company_id_to_show, limit=500)
                 
-                # Получаем данные для облака слов
-                wordcloud_df = get_recent_reviews(company_id_to_show, limit=1000)
-                
-                if not wordcloud_df.empty:
-                    col_wc1, col_wc2 = st.columns([3, 1])
-                    with col_wc2:
-                        use_lemmatization = st.checkbox(
-                            "Лемматизация",
-                            value=False,
-                            key="wc_lemmatize",
-                            help="Лемматизация приводит слова к начальной форме (работает медленнее)"
-                        )
-                        
-                        top_n_words = st.slider(
-                            "Количество слов",
-                            min_value=50,
-                            max_value=150,
-                            value=100,
-                            step=10,
-                            key="wc_top_n"
-                        )
-                    
-                    with col_wc1:
-                        if use_lemmatization:
-                            with st.spinner("Выполняется лемматизация текстов..."):
-                                word_freq_dict = get_word_frequencies_lemmatized(wordcloud_df, top_n=top_n_words)
-                        else:
-                            with st.spinner("Подсчет частоты слов..."):
-                                word_freq_dict = get_word_frequencies_simple(wordcloud_df, top_n=top_n_words)
-                    
-                    if word_freq_dict:
-                        text_for_cloud = ' '.join(word_freq_dict.keys())
-                        
-                        wordcloud = WordCloud(
-                            width=1200, height=600, 
-                            background_color='white',
-                            colormap='viridis', 
-                            max_words=top_n_words, 
-                            min_word_length=3,
-                            prefer_horizontal=0.7, 
-                            relative_scaling=0.5,
-                            collocations=False, 
-                            random_state=42
-                        ).generate(text_for_cloud)
-                        
-                        fig, ax = plt.subplots(figsize=(14, 7))
-                        ax.imshow(wordcloud, interpolation='bilinear')
-                        ax.axis('off')
-                        st.pyplot(fig)
-                        
-                        # Топ-20 слов
-                        with st.expander("📊 Топ-20 ключевых слов"):
-                            top_words_df = pd.DataFrame(list(word_freq_dict.items())[:20], 
-                                                    columns=['Слово', 'Частота'])
-                            top_words_df['Частота'] = top_words_df['Частота'].astype(int)
-                            st.dataframe(top_words_df, use_container_width=True, hide_index=True)
-                    else:
-                        st.warning("Не удалось сгенерировать облако слов")
+                if not cloud_df.empty:
+                    with st.spinner("Анализ текста и генерация облака слов (лемматизация)..."):
+                        try:
+                            # Используем вашу функцию из vanya_topics для лемматизации
+                            word_freq = get_word_frequencies(cloud_df, top_n=100)
+                            
+                            if word_freq:
+                                # Дополнительно убираем слова, которые часто встречаются, но не несут пользы
+                                custom_stopwords = {'приложение', 'очень', 'весь', 'свой', 'который', 'просто', 'это'}
+                                for sw in custom_stopwords:
+                                    word_freq.pop(sw, None)
+                                
+                                # Генерируем облако слов на основе частотного словаря
+                                wordcloud = WordCloud(
+                                    width=800, 
+                                    height=400,
+                                    background_color='white',
+                                    colormap='viridis',
+                                    max_words=100,
+                                    contour_width=1,
+                                    contour_color='steelblue'
+                                ).generate_from_frequencies(word_freq)
+                                
+                                # Отрисовка графика
+                                fig_cloud, ax_cloud = plt.subplots(figsize=(10, 5))
+                                ax_cloud.imshow(wordcloud, interpolation='bilinear')
+                                ax_cloud.axis('off')
+                                
+                                st.pyplot(fig_cloud)
+                            else:
+                                st.warning("Не удалось выделить ключевые слова для облака.")
+                                
+                        except Exception as e:
+                            st.error(f"Ошибка при создании облака слов: {str(e)}")
+                            st.info("Убедитесь, что установлена библиотека natasha.")
                 else:
                     st.info("Нет данных для создания облака слов")
 
@@ -1214,7 +1077,7 @@ else:
     st.markdown("""
     ### 🎯 Что делает система?
     
-    1. **Собирает** уникальные упоминания из **6+ источников**:
+    1. **Собирает** уникальные упоминания из **6 источников**:
        - 📱 Google Play
        - 🍎 App Store
        - 🗺️ Google Карты
