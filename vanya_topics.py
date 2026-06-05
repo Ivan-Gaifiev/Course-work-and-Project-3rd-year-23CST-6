@@ -254,7 +254,11 @@ def gigachat_summarize_topic(words):
 
     if not words:
         return "Неопределённая тема"
-
+    
+    giga = GigaChat(
+    credentials="MDE5ZTQ2MDAtMzk1MC03MTAwLWJlOGQtZTgyYmNmOTk5MGYwOjMwZDlhY2MwLTllNGItNDZmNy1hY2QwLTE2MjYxYzVlODY5Yw==",
+    verify_ssl_certs=False)
+    
     prompt = (
         "Сформулируй короткое осмысленное предложение на русском языке.\n"
         "Это название темы пользовательских отзывов.\n"
